@@ -31,32 +31,19 @@
 		{% include topbar.html %}
 		<div class="tag_list">
 			<ul id="tag-list">
-				<li><a href="/" ><img src="/assets/img/disk.png" />(C:)</a>
+				<li><a href="/" ><img src="/assets/img/disk.png" />Home:</a>
 			<ul>
 				<li><a href="/tag/blog/" title="blog"><img src="/assets/img/folder.ico" />blog</a></li>
-				<li><a href="/tag/tour/" title="tour dates"><img src="/assets/img/folder.ico" />tour dates</a></li>
 			</ul>
 				</li>
 			</ul>
 		</div>
 		<div class="post_list">
-			{% unless page.date%}
-				{% if page.title == 'me' or page.title == '404...' %}
-					<ul>
-						{% for post in site.posts %}
-						<li><a href="{{  post.url }}" title="{{ post.title }}"><img src="/assets/img/file.ico" title="{{ post.title }}" />{{ post.title }}</a></li>
-						{% endfor %}
-					</ul>
-				{% else %}
-					 
-				{% endif %}
-			{% else %}
 				<ul>
 					{% for post in site.posts %}
 					<li><a href="{{  post.url }}" title="{{ post.title }}"><img src="/assets/img/file.ico" title="{{ post.title }}" />{{ post.title }}</a></li>
 					{% endfor %}
 				</ul>
-			{% endunless %}
 		</div>
 		<div class="post_total">
 			{% if page.tag %}
@@ -89,7 +76,7 @@
 	<script src="/assets/js/001.js"></script>
 	<script src="/assets/js/002.js"></script>
 	<div class="footer">
-		<p>Created by <a href="http://github.com/h01000110" target="_blank">h01000110 (hi)</a> | Code licensed under <a href="https://github.com/h01000110/h01000110.github.io/blob/master/LICENSE" target="_blank">MIT License</a></p>
+		<p>Hacked to bits by fireworksordie from the original theme by <a href="http://github.com/h01000110" target="_blank">h01000110 (hi)</a> under <a href="https://github.com/h01000110/h01000110.github.io/blob/master/LICENSE" target="_blank">MIT License</a></p>
 	</div>
 </body>
 </html>
