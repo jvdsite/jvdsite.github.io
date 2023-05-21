@@ -1,5 +1,11 @@
+blog:
+  name: blog
+
+tour:
+  name: tour
+
 tag1:
-  name: test
+  name: tag1
 
 tag2:
   name: tag2

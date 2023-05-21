@@ -33,11 +33,8 @@
 			<ul id="tag-list">
 				<li><a href="/" ><img src="/assets/img/disk.png" />(C:)</a>
 			<ul>
-				{% assign tags = site.tags | sort %}
-				{% for tag in tags %}
-				<li><a href="/tag/{{ tag | first | slugify }}/" title="{{ tag[0] | replace:'-', ' ' }}"><img src="/assets/img/folder.ico" />{{ tag[0] | replace:'-', ' ' }}</a></li>
-				{% endfor %}
-				<li><a href="/tour/" title="tour dates"><img src="/assets/img/folder.ico" />tour dates</a></li>
+				<li><a href="/tag/blog/" title="blog"><img src="/assets/img/folder.ico" />blog</a></li>
+				<li><a href="/tag/tour/" title="tour dates"><img src="/assets/img/folder.ico" />tour dates</a></li>
 			</ul>
 				</li>
 			</ul>
@@ -51,7 +48,7 @@
 						{% endfor %}
 					</ul>
 				{% else %}
-					{{ content }}
+					 
 				{% endif %}
 			{% else %}
 				<ul>
@@ -85,7 +82,6 @@
 			<div class="post_content">
         		{{ content }}
 				{% if page.title %}
-					{% include donate.html %}
 				{% endif %}
 			</div>
 		</div>
@@ -93,7 +89,7 @@
 	<script src="/assets/js/001.js"></script>
 	<script src="/assets/js/002.js"></script>
 	<div class="footer">
-		<p>Hacked to bits by fireworksordie from the original theme by <a href="http://github.com/h01000110" target="_blank">h01000110 (hi)</a> under <a href="https://github.com/h01000110/h01000110.github.io/blob/master/LICENSE" target="_blank">MIT License</a></p>
+		<p>Created by <a href="http://github.com/h01000110" target="_blank">h01000110 (hi)</a> | Code licensed under <a href="https://github.com/h01000110/h01000110.github.io/blob/master/LICENSE" target="_blank">MIT License</a></p>
 	</div>
 </body>
 </html>

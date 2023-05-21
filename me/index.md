@@ -1,6 +1,6 @@
 ---
-layout: me
-title: me
+layout: page
+title: "About Me"
 ---
 
 John's a sweet dude. He grew up in Anacortes, WA and started playing in bands. Back then he had a whopping mop of curly hair and played some emo keyboard music. It was already pretty good. Like you could tell he was getting somewhere.

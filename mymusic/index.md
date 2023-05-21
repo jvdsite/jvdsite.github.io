@@ -1,14 +1,15 @@
 ---
-layout: default
+layout: music-jvd
+title: "My Music"
 ---
-<ul>
-	{% for post in site.posts %}
-	<li><a href="{{  post.url }}" title="{{ post.title }}"><img src="/assets/img/file.ico" title="{{ post.title }}" />{{ post.title }}</a></li>
-	{% endfor %}
-</ul>
 
+i made you a mixtape of my best stuff. double-click and listen to some glorious 64kbps mp3s!!!
 
-<div>testing some stuff</div>
+play it as loud as you can on some of these babys. trust me!
+
+(seems like Safari on Macs and iOS plays songs a bit fast at the start so just bear with it for a few seconds. you might need to nudge the seek bar, too)
+
+<img width="400px" src="/assets/images/speakers.jpg">
 
 <div id="app"></div>
 <script src="https://unpkg.com/webamp"></script>
