@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
+    
+      <!-- Audio player and image button -->
+      <img id="audioButton" src="assets/img/soundon.png" alt="Play Audio">
+      <audio id="audioClip">
+          <source src="assets/aud/birds.mp3" type="audio/mpeg">
+          <source src="assets/aud/birds.ogg" type="audio/ogg">
+          Your browser does not support the audio element.
+      </audio>    
+
   <!-- Favicon for older browsers -->
   <link rel="icon" href="/assets/icon/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/assets/icon/favicon.ico" type="image/x-icon">
@@ -130,7 +140,19 @@
         th {
             background-color: #f2f2f2;
         }
+
+        /* Styling for fixed audio button in the upper-right corner */
+        #audioButton {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 75px;
+            height: 75px;
+            z-index: 1000;
+            cursor: pointer;
+        }
         
+
         /* Media query for small screens */
         @media (max-width: 768px) {
             .navbar a {
@@ -187,43 +209,6 @@
             <th>Date</th>
             <th>Tickets</th>
         </tr>
-        <tr>
-            <td>Tyson's Barn</td>
-            <td>Bellingham, WA</td>
-            <td>THURSDAY, SEPTEMBER 19TH</td>
-            <td><a href="https://www.eventbrite.com/e/taylor-armstrong-x-john-van-deusen-west-coast-tour-bellingham-wa-tickets-953132634367">Link</a></td>
-        </tr>
-        <tr>
-            <td>Door of Hope</td>
-            <td>Portland, OR</td>
-            <td>FRIDAY, SEPTEMBER 20TH</td>
-            <td><a href="https://www.eventbrite.com/e/taylor-armstrong-x-john-van-deusen-west-coast-tour-portland-or-tickets-953133326437">Link</a></td>
-        </tr>
-        <!-- remove the entire open bracket, !, - -, before <tr> and the - - > after the slash tr to uncomment. then hit Commit changes, add a note so you can track the change, and hit Commit changes -->
-        <!-- <tr>
-            <td>BlackBox</td>
-            <td>Redding, CA</td>
-            <td>SATURDAY, SEPTEMBER 21ST</td>
-            <td><a href="linkwillgohere">Link</a></td>
-        </tr> -->
-        <tr>
-            <td>Everwell Church</td>
-            <td>Orange County, CA</td>
-            <td>WEDNESDAY, SEPTEMBER 25TH</td>
-            <td><a href="https://www.eventbrite.com/e/taylor-armstrong-x-john-van-deusen-west-coast-tour-newport-beach-ca-tickets-953136676457">Link</a></td>
-        </tr>
-        <tr>
-            <td>Redeemer Church</td>
-            <td>La Mirada, CA</td>
-            <td>THURSDAY, SEPTEMBER 26TH</td>
-            <td><a href="https://www.eventbrite.com/e/taylor-armstrong-x-john-van-deusen-west-coast-tour-la-mirada-ca-tickets-953137539037">Link</a></td>
-        </tr>
-        <tr>
-            <td>Light Church</td>
-            <td>San Diego, CA</td>
-            <td>FRIDAY, SEPTEMBER 27TH</td>
-            <td><a href="https://www.eventbrite.com/e/taylor-armstrong-x-john-van-deusen-west-coast-tour-san-diego-ca-tickets-953137659397">Link</a></td>
-        </tr>
     </table>
 </div>
 
@@ -246,5 +231,29 @@
         <p>If you'd like to support my work, you can do so <a href="https://renewthearts.donorsupport.co/page/JVD-2024">here<a/>.</p>
         <p>Thank you for stopping by.</p>
     </div>
+
+    <script>
+        const audio = document.getElementById('audioClip');
+        const button = document.getElementById('audioButton');
+        let isPlaying = false;
+    
+        button.addEventListener('click', function () {
+            if (isPlaying) {
+                audio.pause();
+                button.src = 'assets/img/soundon.png'; // Play button image
+            } else {
+                audio.play();
+                button.src = 'assets/img/soundoff.png'; // Stop button image
+            }
+            isPlaying = !isPlaying;
+        });
+    
+        // Reset the image to the play button if the audio ends naturally
+        audio.addEventListener('ended', function() {
+            isPlaying = false;
+            button.src = 'assets/img/soundon.png'; // Reset to play button image
+        });
+    </script>
+
 </body>
 </html>
