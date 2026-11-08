@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Piece By Piece</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --mat:#000;
+    --paper:#e4dcc8;
+    --accent:#78a697;
+    --gap:12px;
+  }
+  html,body{
+    margin:0; min-height:100%;
+    background:var(--mat); color:var(--paper);
+    font:14px/1.3 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  body{ display:flex; flex-direction:column; min-height:100dvh; }
+  header{
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    padding:var(--gap);
+    padding-top:max(var(--gap), env(safe-area-inset-top));
+  }
+  select,button{
+    font:inherit; color:var(--paper); background:#111;
+    border:1px solid #4a463c; border-radius:8px;
+    padding:9px 12px; min-height:40px;
+  }
+  select{ max-width:100%; }
+  button{ cursor:pointer; }
+  button:hover:not(:disabled), select:hover{ border-color:var(--accent); }
+  button:focus-visible, select:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  button:disabled{ opacity:.4; cursor:default; }
+  #counter{ margin-left:auto; font-variant-numeric:tabular-nums; opacity:.85; }
+  main{
+    flex:1; display:flex; gap:var(--gap);
+    padding:0 var(--gap) max(var(--gap), env(safe-area-inset-bottom));
+  }
+  @media (orientation:landscape){
+    main{ flex-direction:row; --board:min(calc(100dvh - 130px), calc(100vw - 260px)); }
+  }
+  @media (orientation:portrait){
+    main{ flex-direction:column; --board:min(calc(100vw - 24px), calc(100dvh - 300px)); }
+  }
+  #boardWrap{ position:relative; width:var(--board); flex:none; }
+  #board{
+    display:block; width:var(--board); height:var(--board);
+    background:#fff;
+    touch-action:none;
+    cursor:grab;
+    -webkit-touch-callout:none;
+  }
+  #board.dragging{ cursor:grabbing; }
+  #overlay{
+    position:absolute; left:0; top:0; width:var(--board); height:var(--board);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    text-align:center; color:#222; background:rgba(255,255,255,.82);
+    pointer-events:none;
+  }
+  #overlay[hidden]{ display:none; }
+  #overlay button{ pointer-events:auto; }
+  #hint{ margin-top:8px; opacity:.6; font-size:13px; }
+  #pileCol{ flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+  #pileBar{ display:flex; justify-content:flex-end; }
+  #pile{
+    position:relative; flex:1; min-width:0; min-height:150px;
+    background:var(--paper); border-radius:10px; overflow:hidden;
+    isolation:isolate;
+    outline:3px solid transparent; outline-offset:-3px;
+    transition:outline-color .15s, background-color .15s;
+  }
+  #pile.hot{ outline-color:var(--accent); background:#ece5d3; }
+  #drag{
+    position:fixed; left:0; top:0; width:100%; height:100%;
+    pointer-events:none; z-index:50;
+  }
+  #pileLabel{
+    position:absolute; left:12px; top:10px; color:#6b6554;
+    font-size:12px; letter-spacing:.08em; text-transform:uppercase; z-index:1000000;
+  }
+  .pileItem{
+    position:absolute; transform:translate(-50%,-50%) rotate(var(--rot));
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));
+    animation:pop .35s ease-out;
+    cursor:grab;
+    touch-action:none;
+  }
+  .pileItem.held{
+    cursor:grabbing;
+    transform:translate(-50%,-50%) rotate(var(--rot)) scale(1.06);
+    filter:drop-shadow(0 6px 8px rgba(0,0,0,.4));
+  }
+  @keyframes pop{ from{ opacity:0; transform:translate(-50%,-50%) rotate(var(--rot)) scale(1.5);} }
+</style>
+</head>
+<body>
+<header>
+  <select id="picker" aria-label="Choose a collage"></select>
+  <button id="takeBtn" disabled>Take off top piece</button>
+  <button id="resetBtn" disabled>Reset</button>
+  <div id="counter" aria-live="polite"></div>
+</header>
+<main>
+  <div id="boardWrap">
+    <canvas id="board" width="1280" height="1280" aria-label="Collage"></canvas>
+    <div id="overlay" hidden></div>
+    <div id="hint">Drag the top piece off the canvas. Drag pieces in the pile to rearrange them.</div>
+  </div>
+  <div id="pileCol">
+    <div id="pileBar"><button id="clearPileBtn" disabled>Clear pile</button></div>
+    <div id="pile"><div id="pileLabel">Pile</div></div>
+  </div>
+</main>
+<canvas id="drag"></canvas>
+<script>
+'use strict';
+const picker   = document.getElementById('picker');
+const takeBtn  = document.getElementById('takeBtn');
+const resetBtn = document.getElementById('resetBtn');
+const clearPileBtn = document.getElementById('clearPileBtn');
+const counter  = document.getElementById('counter');
+const board    = document.getElementById('board');
+const ctx      = board.getContext('2d');
+const overlay  = document.getElementById('overlay');
+const pileEl   = document.getElementById('pile');
+const ov       = document.getElementById('drag');
+const ovctx    = ov.getContext('2d');
+let collages = [];
+const states = new Map();
+let cur = null;
+let busy = false;
+let drag = null;
+let pose = identityPose(0, 0);
+let W = 1280;
+let lifted = false;
+let ovDirty = false;
+let ovScale = 1;
+let loadToken = 0;
+function easeInOutQuad(t){ return t < .5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2; }
+function lerp(a, b, t){ return a + (b - a) * t; }
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+function identityPose(x, y){ return { gx:x, gy:y, px:x, py:y, rot:0, s:1, a:1 }; }
+function updateCounter(){
+  if (!cur){ counter.textContent = ''; return; }
+  counter.textContent = `${cur.r} left · ${cur.pile.length} in pile`;
+}
+function updateButtons(){
+  takeBtn.disabled  = !cur || busy || cur.r === 0;
+  resetBtn.disabled = !cur || busy || (cur.r === cur.m.layers.length && cur.pile.length === 0);
+  clearPileBtn.disabled = !cur || cur.pile.length === 0;
+}
+function setOverlay(html, withReset){
+  if (!html){ overlay.hidden = true; overlay.textContent = ''; return; }
+  overlay.hidden = false;
+  overlay.textContent = '';
+  const p = document.createElement('div');
+  p.textContent = html;
+  overlay.appendChild(p);
+  if (withReset){
+    const b = document.createElement('button');
+    b.textContent = 'Put it back together';
+    b.addEventListener('click', resetCollage);
+    overlay.appendChild(b);
+  }
+}
+const pending = new Map();
+const ready   = new Map();
+function getImg(url){
+  if (pending.has(url)) return pending.get(url);
+  const p = fetch(url)
+    .then(r => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.blob(); })
+    .then(async blob => {
+      if (window.createImageBitmap) return createImageBitmap(blob);
+      const img = new Image(); img.src = URL.createObjectURL(blob); await img.decode(); return img;
+    })
+    .then(bm => { ready.set(url, bm); return bm; })
+    .catch(e => { pending.delete(url); throw e; });
+  pending.set(url, p);
+  return p;
+}
+function prune(keep){
+  for (const url of [...pending.keys()]){
+    if (keep.has(url)) continue;
+    pending.delete(url);
+    const bm = ready.get(url);
+    ready.delete(url);
+    if (bm && bm.close) bm.close();
+  }
+}
+function urlsFor(st, r){
+  const out = [];
+  if (r >= 1) out.push(st.entry.path + st.m.layers[r-1].layer);
+  if (r >= 2) out.push(st.entry.path + st.m.layers[r-2].comp);
+  return out;
+}
+function fitCanvas(){
+  const css = board.getBoundingClientRect().width || 640;
+  const size = cur ? cur.m.size : 1280;
+  const target = Math.max(200, Math.min(size, Math.round(css * (window.devicePixelRatio || 1))));
+  if (target !== W || board.width !== target){
+    W = target; board.width = W; board.height = W;
+  }
+  render();
+}
+let renderQueued = false;
+function requestRender(){
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; render(); });
+}
+function render(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, W);
+  if (!cur || cur.r === 0){ clearCarryLayer(); return; }
+  const m = cur.m, r = cur.r, k = W / m.size;
+  if (r >= 2){
+    const base = ready.get(cur.entry.path + m.layers[r-2].comp);
+    if (base) ctx.drawImage(base, 0, 0, W, W);
+  }
+  const L = m.layers[r-1];
+  const top = ready.get(cur.entry.path + L.layer);
+  if (!top){ clearCarryLayer(); return; }
+  if (!lifted){
+    clearCarryLayer();
+    drawTopPiece(ctx, top, L, k);
+    return;
+  }
+  const b = board.getBoundingClientRect(), s = b.width / W;
+  ovctx.setTransform(1, 0, 0, 1, 0, 0);
+  ovctx.clearRect(0, 0, ov.width, ov.height);
+  ovctx.setTransform(ovScale, 0, 0, ovScale, 0, 0);
+  ovctx.translate(b.left, b.top);
+  ovctx.scale(s, s);
+  drawTopPiece(ovctx, top, L, k);
+  ovctx.globalAlpha = 1;
+  ovDirty = true;
+}
+function drawTopPiece(c, top, L, k){
+  c.translate(pose.px, pose.py);
+  c.rotate(pose.rot);
+  c.scale(pose.s, pose.s);
+  c.translate(-pose.gx, -pose.gy);
+  c.globalAlpha = pose.a;
+  c.drawImage(top, L.x * k, L.y * k, L.w * k, L.h * k);
+}
+function clearCarryLayer(){
+  if (!ovDirty) return;
+  ovctx.setTransform(1, 0, 0, 1, 0, 0);
+  ovctx.clearRect(0, 0, ov.width, ov.height);
+  ovDirty = false;
+}
+function sizeCarryLayer(){
+  const r = ov.getBoundingClientRect();
+  ovScale = Math.min(window.devicePixelRatio || 1, 2);
+  ov.width  = Math.max(1, Math.round(r.width  * ovScale));
+  ov.height = Math.max(1, Math.round(r.height * ovScale));
+  ovDirty = false;
+  render();
+}
+window.addEventListener('resize', sizeCarryLayer);
+function animatePose(to, ms, done){
+  const from = { ...pose };
+  const t0 = performance.now();
+  (function step(now){
+    const t = clamp((now - t0) / ms, 0, 1), e = easeInOutQuad(t);
+    for (const key of ['px','py','rot','s','a']) pose[key] = lerp(from[key], to[key], e);
+    render();
+    if (t < 1) requestAnimationFrame(step); else done && done();
+  })(t0);
+}
+async function enterStep(){
+  const token = loadToken, st = cur;
+  pose = identityPose(W/2, W/2);
+  lifted = false;
+  clearCarryLayer();
+  updateCounter(); updateButtons();
+  if (st.r === 0){
+    prune(new Set());
+    busy = false;
+    render();
+    setOverlay('Everything is in the pile.', true);
+    updateButtons();
+    return;
+  }
+  setOverlay(null);
+  const need = urlsFor(st, st.r);
+  if (!need.every(u => ready.has(u))){
+    busy = true; updateButtons();
+    setOverlay('Loading…');
+    try { await Promise.all(need.map(getImg)); }
+    catch(e){ if (token === loadToken) setOverlay('Could not load this collage (' + e.message + ')'); console.error(e); return; }
+    if (token !== loadToken) return;
+    setOverlay(null);
+  }
+  busy = false;
+  prune(new Set([...need, ...urlsFor(st, st.r - 1)]));
+  render(); updateButtons();
+  urlsFor(st, st.r - 1).forEach(u => getImg(u).catch(() => {}));
+}
+function pileTarget(){
+  const b = board.getBoundingClientRect(), p = pileEl.getBoundingClientRect();
+  return { x: ((p.left + p.width/2) - b.left) / b.width * W,
+           y: ((p.top  + p.height/2) - b.top)  / b.height * W };
+}
+function addToPile(st, L, bitmap, spot){
+  const MAX = 140;
+  const sc = MAX / Math.max(L.w, L.h);
+  const c = document.createElement('canvas');
+  c.width  = Math.max(8, Math.round(L.w * sc));
+  c.height = Math.max(8, Math.round(L.h * sc));
+  c.style.animation = 'none';
+  const tc = c.getContext('2d');
+  tc.imageSmoothingQuality = 'high';
+  tc.drawImage(bitmap, 0, 0, c.width, c.height);
+  const item = { canvas:c, left:spot.left, top:spot.top, rot:spot.rot, z: ++pileZ };
+  st.pile.push(item);
+  mountPileItem(item);
+}
+function mountPileItem(item){
+  const c = item.canvas;
+  c.className = 'pileItem';
+  c._item = item;
+  c.style.zIndex = item.z || 0;
+  c.style.left = item.left + '%';
+  c.style.top  = item.top  + '%';
+  c.style.setProperty('--rot', item.rot + 'deg');
+  c.style.width = Math.round(c.width * 0.75) + 'px';
+  pileEl.appendChild(c);
+}
+function clearPileDom(){
+  pileEl.querySelectorAll('.pileItem').forEach(n => n.remove());
+}
+function showPile(st){
+  clearPileDom();
+  st.pile.forEach(it => { it.canvas.style.animation = 'none'; mountPileItem(it); });
+}
+function thumbCssWidth(L){
+  return Math.round(Math.max(8, Math.round(L.w * 140 / Math.max(L.w, L.h))) * 0.75);
+}
+function commitToPile(dropped){
+  const st = cur, token = loadToken, r = st.r, L = st.m.layers[r-1];
+  const bitmap = ready.get(st.entry.path + L.layer);
+  busy = true; lifted = true; updateButtons();
+  const b = board.getBoundingClientRect(), pr = pileEl.getBoundingClientRect();
+  const spot = { left: 14 + Math.random()*72, top: 18 + Math.random()*70, rot: Math.random()*50 - 25 };
+  if (dropped){
+    const cx = b.left + pose.px / W * b.width, cy = b.top + pose.py / W * b.width;
+    spot.left = clamp((cx - pr.left) / pr.width  * 100, 5, 95);
+    spot.top  = clamp((cy - pr.top)  / pr.height * 100, 5, 95);
+  }
+  const tx = ((pr.left + spot.left / 100 * pr.width)  - b.left) / b.width * W;
+  const ty = ((pr.top  + spot.top  / 100 * pr.height) - b.top)  / b.width * W;
+  const pieceCssW = L.w * b.width / st.m.size;
+  const endScale = thumbCssWidth(L) / pieceCssW;
+  animatePose({ px:tx, py:ty, rot: spot.rot * Math.PI / 180, s:endScale, a:1 }, dropped ? 240 : 420, () => {
+    if (token !== loadToken) return;
+    if (bitmap) addToPile(st, L, bitmap, spot);
+    st.r = r - 1;
+    enterStep();
+  });
+}
+function springBack(){
+  busy = true; updateButtons();
+  animatePose({ px:pose.gx, py:pose.gy, rot:0, s:1, a:1 }, 200, () => { lifted = false; busy = false; updateButtons(); render(); });
+}
+function resetCollage(){
+  if (!cur) return;
+  cur.r = cur.m.layers.length;
+  cur.pile = [];
+  clearPileDom();
+  enterStep();
+}
+function toCanvas(e){
+  const b = board.getBoundingClientRect();
+  return { x: (e.clientX - b.left) / b.width * W, y: (e.clientY - b.top) / b.height * W };
+}
+board.addEventListener('pointerdown', e => {
+  if (busy || !cur || cur.r === 0 || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  e.preventDefault();
+  board.setPointerCapture(e.pointerId);
+  const k = W / cur.m.size, L = cur.m.layers[cur.r - 1];
+  const cx = (L.x + L.w / 2) * k, cy = (L.y + L.h / 2) * k;
+  const p = toCanvas(e);
+  const dist = Math.hypot(p.x - cx, p.y - cy) / W;
+  drag = { id:e.pointerId, cx, cy, ptrX:p.x, ptrY:p.y, t0:performance.now(),
+           ms: clamp(90 + dist * 220, 90, 240) };
+  drag.clientX = e.clientX; drag.clientY = e.clientY;
+  pose = identityPose(cx, cy);
+  lifted = true;
+  board.classList.add('dragging');
+  render();
+  requestAnimationFrame(dragLoop);
+});
+function dragLoop(now){
+  if (!drag) return;
+  const e = easeInOutQuad(clamp((now - drag.t0) / drag.ms, 0, 1));
+  pose.px = lerp(drag.cx, drag.ptrX, e);
+  pose.py = lerp(drag.cy, drag.ptrY, e);
+  pose.rot = clamp((pose.px - drag.cx) / W * 0.3, -0.12, 0.12);
+  pileEl.classList.toggle('hot', wouldDrop(drag.clientX, drag.clientY));
+  render();
+  requestAnimationFrame(dragLoop);
+}
+board.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const p = toCanvas(e);
+  drag.ptrX = p.x; drag.ptrY = p.y;
+  drag.clientX = e.clientX; drag.clientY = e.clientY;
+});
+function wouldDrop(cx, cy){
+  const b = board.getBoundingClientRect();
+  const off = cx < b.left || cx > b.right || cy < b.top || cy > b.bottom;
+  const far = drag && Math.hypot(pose.px - drag.cx, pose.py - drag.cy) / W > 0.45;
+  return off || far;
+}
+function endDrag(e, cancelled){
+  if (!drag || e.pointerId !== drag.id) return;
+  const carriedOff = !cancelled && wouldDrop(e.clientX, e.clientY);
+  drag = null;
+  board.classList.remove('dragging');
+  pileEl.classList.remove('hot');
+  if (carriedOff) commitToPile(true); else springBack();
+}
+board.addEventListener('pointerup',     e => endDrag(e, false));
+board.addEventListener('pointercancel', e => endDrag(e, true));
+takeBtn.addEventListener('click', () => {
+  if (busy || !cur || cur.r === 0) return;
+  const token = loadToken, k = W / cur.m.size, L = cur.m.layers[cur.r - 1];
+  const cx = (L.x + L.w / 2) * k, cy = (L.y + L.h / 2) * k;
+  pose = identityPose(cx, cy);
+  busy = true; lifted = true; updateButtons();
+  render();
+  animatePose({ px:W/2, py:W/2, rot:0, s:1, a:1 }, 380, () => {
+    if (token !== loadToken) return;
+    setTimeout(() => { if (token === loadToken) commitToPile(false); }, 120);
+  });
+});
+resetBtn.addEventListener('click', resetCollage);
+clearPileBtn.addEventListener('click', () => {
+  if (!cur) return;
+  cur.pile = [];
+  clearPileDom();
+  updateCounter(); updateButtons();
+});
+let pileZ = 1;
+let pileDrag = null;
+function pickPileItem(e){
+  for (const el of document.elementsFromPoint(e.clientX, e.clientY)){
+    if (!el.classList.contains('pileItem')) continue;
+    const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+    const a = -el._item.rot * Math.PI / 180;
+    const vx = e.clientX - (r.left + r.width / 2), vy = e.clientY - (r.top + r.height / 2);
+    const lx = vx * Math.cos(a) - vy * Math.sin(a) + w / 2;
+    const ly = vx * Math.sin(a) + vy * Math.cos(a) + h / 2;
+    if (lx < 0 || ly < 0 || lx >= w || ly >= h) continue;
+    const alpha = el.getContext('2d').getImageData(
+      Math.floor(lx / w * el.width), Math.floor(ly / h * el.height), 1, 1).data[3];
+    if (alpha > 20) return el;
+  }
+  return null;
+}
+pileEl.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const el = pickPileItem(e);
+  if (!el) return;
+  e.preventDefault();
+  pileEl.setPointerCapture(e.pointerId);
+  const item = el._item, pr = pileEl.getBoundingClientRect();
+  item.z = ++pileZ; el.style.zIndex = item.z;
+  el.classList.add('held');
+  pileDrag = { item, el, id:e.pointerId,
+               offX: e.clientX - (pr.left + item.left / 100 * pr.width),
+               offY: e.clientY - (pr.top  + item.top  / 100 * pr.height) };
+});
+pileEl.addEventListener('pointermove', e => {
+  if (!pileDrag || e.pointerId !== pileDrag.id) return;
+  const pr = pileEl.getBoundingClientRect(), it = pileDrag.item;
+  it.left = clamp((e.clientX - pileDrag.offX - pr.left) / pr.width  * 100, 2, 98);
+  it.top  = clamp((e.clientY - pileDrag.offY - pr.top)  / pr.height * 100, 2, 98);
+  pileDrag.el.style.left = it.left + '%';
+  pileDrag.el.style.top  = it.top  + '%';
+});
+function endPileDrag(e){
+  if (!pileDrag || e.pointerId !== pileDrag.id) return;
+  pileDrag.el.classList.remove('held');
+  pileDrag = null;
+}
+pileEl.addEventListener('pointerup', endPileDrag);
+pileEl.addEventListener('pointercancel', endPileDrag);
+async function selectCollage(id){
+  const token = ++loadToken;
+  busy = true; drag = null; lifted = false;
+  pileEl.classList.remove('hot');
+  const entry = collages.find(c => c.id === id);
+  setOverlay('Loading…');
+  try {
+    let st = states.get(id);
+    if (!st){
+      const m = await (await fetch(entry.path + 'manifest.json')).json();
+      st = { entry, m, r: m.layers.length, pile: [] };
+      states.set(id, st);
+    }
+    if (token !== loadToken) return;
+    cur = st;
+    prune(new Set());
+    showPile(st);
+    fitCanvas();
+    await enterStep();
+  } catch(e){
+    console.error(e);
+    setOverlay('Could not load this collage.');
+  }
+}
+async function init(){
+  try {
+    collages = await (await fetch('collages.json')).json();
+  } catch(e){
+    setOverlay('Could not load collages.json - open this page from a web server, not from a file.');
+    return;
+  }
+  collages.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.name;
+    picker.appendChild(o);
+  });
+  picker.addEventListener('change', () => selectCollage(picker.value));
+  sizeCarryLayer();
+  new ResizeObserver(fitCanvas).observe(board);
+  if (collages.length) selectCollage(collages[0].id);
+}
+init();
+</script>
+</body>
+</html>
